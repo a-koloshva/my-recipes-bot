@@ -6,6 +6,7 @@ export function getSession(chatId) {
             addStep: undefined,
             pendingName: undefined,
             pendingDescription: undefined,
+            pendingLink: undefined,
             selectCategory: undefined,
         });
     }
@@ -16,5 +17,6 @@ export function resetSession(session) {
     session.addStep = undefined;
     session.pendingName = undefined;
     session.pendingDescription = undefined;
+    session.pendingLink = undefined;
     session.selectCategory = undefined;
 }

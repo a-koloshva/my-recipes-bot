@@ -44,7 +44,12 @@ export function registerCallbacks(bot) {
         if (categoryMatch && session.addStep === 'wait_category') {
             const category = categoryMatch[1];
             const name = session.pendingName || 'Рецепт';
-            const recipe = await addRecipe(name, category, session.pendingDescription);
+            const recipe = await addRecipe(
+                name,
+                category,
+                session.pendingDescription,
+                session.pendingLink,
+            );
 
             resetSession(session);
 
@@ -202,7 +207,7 @@ async function showCategory(ctx, category) {
     let message = `🍽 ${CATEGORIES[category]}:\n\n`;
 
     recipes.forEach((recipe, index) => {
-        message += `${index + 1}. *${recipe.name}*\n   _${recipe.description || 'Описание отсутствует'}_\n\n`;
+        message += `${index + 1}. *${recipe.name}*\n`;
     });
 
     await ctx.editMessageText(message, {

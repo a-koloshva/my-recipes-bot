@@ -44,6 +44,7 @@ export function registerText(bot) {
             await ctx.reply(
                 `🍽 *${recipe.name}*\n\n` +
                     `📝 ${recipe.description || 'Описание отсутствует'}\n\n` +
+                    (recipe.link ? `🔗 ${recipe.link}\n\n` : '') +
                     `📂 Категория: ${CATEGORIES[recipe.category]}`,
                 {
                     parse_mode: 'Markdown',
@@ -80,6 +81,20 @@ export function registerText(bot) {
             }
 
             session.pendingDescription = text;
+            session.addStep = 'wait_link';
+
+            await ctx.reply(
+                '🔗 Введи ссылку на рецепт или напиши "пропустить"',
+                Markup.inlineKeyboard([
+                    [Markup.button.callback('⬅️ Главное меню', 'back_to_menu')],
+                ]),
+            );
+            return;
+        }
+
+        // 🔗 Ввод необязательной ссылки
+        if (session.addStep === 'wait_link') {
+            session.pendingLink = ['пропустить', 'skip'].includes(text.toLowerCase()) ? '' : text;
             session.addStep = 'wait_category';
 
             await ctx.reply('📂 Выбери категорию блюда:', categoryMenu());
