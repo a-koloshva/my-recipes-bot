@@ -1,2 +1,7 @@
 node_modules/
 .env
+ideas.txt
+data/recipes.sqlite
+data/recipes.sqlite.backup
+data/recipes.sqlite-shm
+data/recipes.sqlite-wal

@@ -12,6 +12,9 @@
     "author": "",
     "license": "ISC",
     "description": "",
+    "engines": {
+        "node": ">=22.5.0"
+    },
     "dependencies": {
         "@telegraf/session": "^2.0.0-beta.7",
         "dotenv": "^17.4.2",

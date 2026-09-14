@@ -1,12 +1,14 @@
-import fs from 'fs/promises';
+import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { DatabaseSync } from 'node:sqlite';
 
-// Эмуляция __dirname для ES-модулей
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const DATA_FILE = path.join(__dirname, 'data', 'recipes.json');
+const DATA_DIRECTORY = path.join(__dirname, 'data');
+const DATABASE_FILE = path.join(DATA_DIRECTORY, 'recipes.sqlite');
+const LEGACY_DATA_FILE = path.join(DATA_DIRECTORY, 'recipes.json');
 
 export const CATEGORIES = {
     breakfast: 'Завтрак',
@@ -14,89 +16,155 @@ export const CATEGORIES = {
     dinner: 'Ужин',
 };
 
-export async function loadData() {
-    const emptyData = { recipes: [], nextId: 1 };
+fs.mkdirSync(DATA_DIRECTORY, { recursive: true });
 
-    await fs.mkdir(path.dirname(DATA_FILE), { recursive: true });
+const database = new DatabaseSync(DATABASE_FILE);
+database.exec(`
+    CREATE TABLE IF NOT EXISTS recipes (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        category TEXT NOT NULL,
+        description TEXT NOT NULL DEFAULT '',
+        created_at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_recipes_category ON recipes(category);
+`);
 
+function migrateLegacyData() {
+    const recipeCount = database.prepare('SELECT COUNT(*) AS count FROM recipes').get().count;
+
+    if (Number(recipeCount) > 0 || !fs.existsSync(LEGACY_DATA_FILE)) {
+        return;
+    }
+
+    const legacyData = JSON.parse(fs.readFileSync(LEGACY_DATA_FILE, 'utf8'));
+    const recipes = Array.isArray(legacyData.recipes) ? legacyData.recipes : [];
+    const insert = database.prepare(`
+        INSERT INTO recipes (id, name, category, description, created_at)
+        VALUES (?, ?, ?, ?, ?)
+    `);
+
+    database.exec('BEGIN');
     try {
-        const data = await fs.readFile(DATA_FILE, 'utf-8');
-
-        if (!data.trim()) {
-            throw new Error(`Файл данных пуст: ${DATA_FILE}`);
+        for (const recipe of recipes) {
+            insert.run(
+                recipe.id,
+                String(recipe.name ?? '').trim(),
+                recipe.category,
+                String(recipe.description ?? '').trim(),
+                recipe.createdAt || new Date().toISOString(),
+            );
         }
-
-        return JSON.parse(data);
+        database.exec('COMMIT');
     } catch (error) {
-        if (error.code === 'ENOENT') {
-            await saveData(emptyData);
-            return emptyData;
-        }
-
-        throw new Error(`Не удалось загрузить данные из ${DATA_FILE}: ${error.message}`, {
+        database.exec('ROLLBACK');
+        throw new Error(`Не удалось перенести данные из ${LEGACY_DATA_FILE}: ${error.message}`, {
             cause: error,
         });
     }
 }
 
+migrateLegacyData();
+
+function mapRecipe(recipe) {
+    return {
+        id: Number(recipe.id),
+        name: recipe.name,
+        category: recipe.category,
+        description: recipe.description,
+        createdAt: recipe.created_at,
+    };
+}
+
+export async function loadData() {
+    const recipes = database
+        .prepare('SELECT id, name, category, description, created_at FROM recipes ORDER BY id')
+        .all()
+        .map(mapRecipe);
+
+    return {
+        recipes,
+        nextId: recipes.length > 0 ? recipes[recipes.length - 1].id + 1 : 1,
+    };
+}
+
 export async function saveData(data) {
-    await fs.mkdir(path.dirname(DATA_FILE), { recursive: true });
-    await fs.writeFile(DATA_FILE, JSON.stringify(data, null, 2), 'utf-8');
+    database.exec('BEGIN');
+    try {
+        database.exec('DELETE FROM recipes');
+        const insert = database.prepare(`
+            INSERT INTO recipes (id, name, category, description, created_at)
+            VALUES (?, ?, ?, ?, ?)
+        `);
+
+        for (const recipe of data.recipes) {
+            insert.run(
+                recipe.id,
+                recipe.name,
+                recipe.category,
+                recipe.description ?? '',
+                recipe.createdAt || new Date().toISOString(),
+            );
+        }
+
+        database.exec('COMMIT');
+    } catch (error) {
+        database.exec('ROLLBACK');
+        throw error;
+    }
 }
 
 let dataOperation = Promise.resolve();
 
 function withDataLock(operation) {
     const result = dataOperation.then(operation);
-
-    // Ошибка одной операции не блокирует следующие
     dataOperation = result.catch(() => {});
-
     return result;
 }
 
-export async function addRecipe(name, category, description) {
+export function addRecipe(name, category, description) {
     return withDataLock(async () => {
-        const data = await loadData();
+        const createdAt = new Date().toISOString();
+        const result = database
+            .prepare(
+                `
+                INSERT INTO recipes (name, category, description, created_at)
+                VALUES (?, ?, ?, ?)
+            `,
+            )
+            .run(name.trim(), category, description.trim(), createdAt);
 
-        const recipe = {
-            id: data.nextId,
+        return {
+            id: Number(result.lastInsertRowid),
             name: name.trim(),
             category,
             description: description.trim(),
-            createdAt: new Date().toISOString(),
+            createdAt,
         };
-
-        data.recipes.push(recipe);
-        data.nextId++;
-
-        await saveData(data);
-        return recipe;
     });
 }
 
 export async function getAllRecipes() {
-    const data = await loadData();
-    return data.recipes;
+    return (await loadData()).recipes;
 }
 
 export async function getRecipesByCategory(category) {
-    const data = await loadData();
-    return data.recipes.filter((r) => r.category === category);
+    return database
+        .prepare(
+            `
+            SELECT id, name, category, description, created_at
+            FROM recipes
+            WHERE category = ?
+            ORDER BY id
+        `,
+        )
+        .all(category)
+        .map(mapRecipe);
 }
 
-export async function deleteRecipe(id) {
+export function deleteRecipe(id) {
     return withDataLock(async () => {
-        const data = await loadData();
-        const initialLength = data.recipes.length;
-
-        data.recipes = data.recipes.filter((recipe) => recipe.id !== id);
-
-        if (data.recipes.length < initialLength) {
-            await saveData(data);
-            return true;
-        }
-
-        return false;
+        const result = database.prepare('DELETE FROM recipes WHERE id = ?').run(id);
+        return result.changes > 0;
     });
 }
