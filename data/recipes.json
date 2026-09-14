@@ -1,0 +1,47 @@
+{
+  "recipes": [
+    {
+      "id": 1,
+      "name": "Каша",
+      "category": "breakfast",
+      "description": "Обычная каша с молоком",
+      "createdAt": "2026-08-22T16:44:48.810Z"
+    },
+    {
+      "id": 2,
+      "name": "яичница",
+      "category": "breakfast",
+      "description": "Яичница с помидорами и зеленью",
+      "createdAt": "2026-08-23T11:30:03.732Z"
+    },
+    {
+      "id": 3,
+      "name": "Каша с ягодами",
+      "category": "breakfast",
+      "description": "Каша с добавлением ягод",
+      "createdAt": "2026-08-23T11:39:22.868Z"
+    },
+    {
+      "id": 4,
+      "name": "Блины",
+      "category": "breakfast",
+      "description": "Блины с творогом и вареньем",
+      "createdAt": "2026-08-23T13:20:31.744Z"
+    },
+    {
+      "id": 5,
+      "name": "Лепешки",
+      "category": "breakfast",
+      "description": "Возьми шпинат и овсянку, спешай и пожарь",
+      "createdAt": "2026-08-23T13:22:58.578Z"
+    },
+    {
+      "id": 6,
+      "name": "Говядина с картошкой",
+      "category": "lunch",
+      "description": "Тушеная говядина и картошка",
+      "createdAt": "2026-08-23T19:50:10.449Z"
+    }
+  ],
+  "nextId": 7
+}
